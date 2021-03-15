@@ -1,0 +1,5 @@
+# depslib dependency file v1.0
+1615735913 source:c:\users\hyeon-desktop\documents\cdbl_workspace\sfml_img_lister\main.cpp
+	<iostream>
+	<SFML/Graphics.hpp>
+
