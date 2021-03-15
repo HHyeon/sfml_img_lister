@@ -1,3 +1,7 @@
+
+#include <dirent.h>
+#include <string>
+#include <windows.h>
 #include <iostream>
 #include <SFML/Graphics.hpp>
 using namespace std;
@@ -52,9 +56,49 @@ void runner()
    }
 }
 
+int seekdir(string path)
+{
+   DIR *dir;
+   struct dirent *dirread;
+
+   if((dir=opendir(path.c_str()))!=nullptr)
+   {
+      while((dirread=readdir(dir))!=nullptr)
+      {
+         string item = string(dirread->d_name);
+         if(item == "." || item == "..") continue;
+
+         string name = path + item;
+         cout << name << endl;
+      }
+
+      closedir(dir);
+   }
+   else
+   {
+      return 1;
+   }
+}
+
 int main()
 {
-   window.setFramerateLimit(60);
+   TCHAR buffer[MAX_PATH] = {0};
+   GetModuleFileName(NULL, buffer, MAX_PATH);
+   string pwd = string(buffer);
+   pwd = pwd.substr(0, pwd.find_last_of("\\"));
+
+   while(true)
+   {
+      int n = pwd.find("\\");
+      if(n==string::npos) break;
+      pwd.replace(n,1,"/");
+   }
+
+//   seekdir(pwd);
+//
+//   return 0;
+
+   window.setFramerateLimit(30);
 
    Thread imgdynamicloadrunner(runner);
    imgdynamicloadrunner.launch();
@@ -85,9 +129,7 @@ int main()
                for(int i=3;i<9;i++)
                {
                   if(!loaded[displayindexfield[i]])
-                  {
                      scrollup = false;
-                  }
                   if(!scrollup) break;
                }
 
@@ -118,9 +160,7 @@ int main()
                for(int i=0;i<9-3;i++)
                {
                   if(!loaded[displayindexfield[i]])
-                  {
                      scrolldn = false;
-                  }
                   if(!scrolldn) break;
                }
 
