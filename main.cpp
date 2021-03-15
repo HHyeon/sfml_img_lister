@@ -10,8 +10,25 @@ using namespace sf;
 bool loaded[IMGQUEUE];
 Texture texture[IMGQUEUE];
 Sprite sprite[IMGQUEUE];
+int displayindexfield[IMGQUEUE] = {0,1,2,3,4,5,6,7,8};
 
 RenderWindow window(VideoMode(WIDTH,HEIGHT),"imglister", Style::Default);
+
+bool scrolldn = false;
+bool scrollup = false;
+
+string names[IMGQUEUE] =
+{
+   "1.png",
+   "2.png",
+   "3.png",
+   "4.png",
+   "5.png",
+   "6.png",
+   "7.png",
+   "8.png",
+   "9.png"
+};
 
 void runner()
 {
@@ -22,7 +39,7 @@ void runner()
          if(!loaded[i])
          {
             texture[i] = Texture();
-            texture[i].loadFromFile("11758.jpg");
+            texture[i].loadFromFile(names[i]);
             sprite[i] = Sprite();
             sprite[i].setTexture(texture[i]);
             loaded[i] = true;
@@ -41,8 +58,6 @@ int main()
 
    Thread imgdynamicloadrunner(runner);
    imgdynamicloadrunner.launch();
-
-   int ypos = 0;
 
    Event e;
    while(window.isOpen())
@@ -65,48 +80,103 @@ int main()
          case Event::MouseWheelMoved:
             if(e.mouseWheel.delta>0)
             {
-               ypos+=100;
+               scrollup = true;
+
+               for(int i=3;i<9;i++)
+               {
+                  if(!loaded[displayindexfield[i]])
+                  {
+                     scrollup = false;
+                  }
+                  if(!scrollup) break;
+               }
+
+               if(scrollup)
+               {
+                  int tmp[3]={0,0,0};
+
+                  for(int i=0;i<3;i++)
+                     tmp[i] = displayindexfield[i+6];
+                  for(int i=8;i>=3;i--)
+                     displayindexfield[i] = displayindexfield[i-3];
+                  for(int i=0;i<3;i++)
+                  {
+                     displayindexfield[i] = tmp[i];
+                     loaded[tmp[i]] = false;
+                  }
+
+               }
+               else
+               {
+                  cout << "wait for loading...\n";
+               }
             }
             else
             {
-               ypos-=100;
-            }
+               scrolldn = true;
 
-            cout << ypos << endl;
+               for(int i=0;i<9-3;i++)
+               {
+                  if(!loaded[displayindexfield[i]])
+                  {
+                     scrolldn = false;
+                  }
+                  if(!scrolldn) break;
+               }
+
+               if(scrolldn)
+               {
+                  int tmp[3]={0,0,0};
+
+                  for(int i=0;i<3;i++)
+                     tmp[i] = displayindexfield[i];
+                  for(int i=0;i<6;i++)
+                     displayindexfield[i] = displayindexfield[i+3];
+                  for(int i=0;i<3;i++)
+                  {
+                     displayindexfield[6+i] = tmp[i];
+                     loaded[tmp[i]] = false;
+                  }
+               }
+               else
+               {
+                  cout << "wait for loading...\n";
+               }
+
+
+            }
             break;
          }
       }
+
 
       window.clear();
 
       for(int i=0;i<IMGQUEUE;i++)
       {
-         if(loaded[i])
+         int currindex = displayindexfield[i];
+
+         if(loaded[currindex])
          {
             int imgwid = WIDTH/3;
             int imghei = HEIGHT/3;
 
             float scaletofit=0;
 
-            if(texture[i].getSize().x > texture[i].getSize().y)
-               scaletofit = (float)imgwid / (float)texture[i].getSize().x;
+            if(texture[currindex].getSize().x > texture[currindex].getSize().y)
+               scaletofit = (float)imgwid / (float)texture[currindex].getSize().x;
             else
-               scaletofit = (float)imghei / (float)texture[i].getSize().y;
+               scaletofit = (float)imghei / (float)texture[currindex].getSize().y;
 
             int px = i%3;
             int py = i<3 ? 0 : i/3;
 
-            sprite[i].setScale(scaletofit,scaletofit);
-            sprite[i].setPosition(px*imgwid, py*imghei + ypos);
+            sprite[currindex].setScale(scaletofit,scaletofit);
+            sprite[currindex].setPosition(px*imgwid, py*imghei);
 
 //            cout << px <<", "<< py << endl;
 
-            window.draw(sprite[i]);
-
-         }
-         else
-         {
-
+            window.draw(sprite[currindex]);
          }
       }
 
@@ -114,8 +184,6 @@ int main()
    }
 
    imgdynamicloadrunner.wait();
-
-
 
 }
 
