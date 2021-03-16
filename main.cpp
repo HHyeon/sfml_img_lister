@@ -7,13 +7,14 @@
 using namespace std;
 using namespace sf;
 
-#define WIDTH 1200
-#define HEIGHT 900
+#define WIDTH 1200*2
+#define HEIGHT 900*2
 
 #define IMGQUEUE 9
 bool loaded[IMGQUEUE];
 Texture texture[IMGQUEUE];
 Sprite sprite[IMGQUEUE];
+string imgpath[IMGQUEUE];
 int displayindexfield[IMGQUEUE] = {0,1,2,3,4,5,6,7,8};
 
 RenderWindow window(VideoMode(WIDTH,HEIGHT),"imglister", Style::Default);
@@ -21,78 +22,58 @@ RenderWindow window(VideoMode(WIDTH,HEIGHT),"imglister", Style::Default);
 int currentscrolldirection = 0;
 int currentscrolldirectionpast = -1;
 
+Mutex mutex;
+
 vector<string> dirlist;
 
-int currentimgpos=0;
-int targetimgpos=9;
-
-void runner()
-{
-   while(window.isOpen())
-   {
-      for(int i=0;i<IMGQUEUE;i++)
-      {
-         if(!loaded[i])
-         {
-            texture[i] = Texture();
-            texture[i].loadFromFile(dirlist.at(currentimgpos)); // names[i]
-            sprite[i] = Sprite();
-            sprite[i].setTexture(texture[i]);
-            loaded[i] = true;
-
-            cout << "loaded : " << dirlist.at(currentimgpos) << endl;
-
-            if(currentimgpos!=targetimgpos)
-            {
-               currentimgpos++;
-               if(currentimgpos>=(int)dirlist.size())
-                  currentimgpos=0;
-            }
-
-         }
-         if(!window.isOpen()) break;
-      }
-      sleep(milliseconds(100));
-   }
-}
-
-
+int totalseeked=0;
+int totalfound=0;
 int seekdir(string path)
 {
    DIR *dir;
    struct dirent *dirread;
 
-   if((dir=opendir(path.c_str()))!=nullptr)
+   if((dir=opendir(path.c_str()))!=NULL)
    {
-      while((dirread=readdir(dir))!=nullptr)
+      while((dirread=readdir(dir))!=NULL)
       {
          string item = string(dirread->d_name);
          if(item == "." || item == "..") continue;
 
+         totalseeked++;
+
          string name = path + "/" + item;
 
-         if(opendir(name.c_str())!=nullptr)
+         if(opendir(name.c_str())!=NULL)
          {
             seekdir(name);
          }
          else
          {
             string ext = name.substr(name.find_last_of(".")+1);
-
-            if(ext=="jpg"||ext=="jpeg"||ext=="png")
+            if((ext=="jpg"||ext=="jpeg"||ext=="png")
+//                && name.find("poster")!=string::npos
+               )
             {
                dirlist.push_back(name);
+               totalfound++;
             }
          }
+
+         cout << "\rfound:" << totalfound << ", " << totalseeked << "\t\t";
       }
       closedir(dir);
+
    }
    else
       return 1;
    return 0;
 }
 
-int main()
+int currentimgpos=0;
+int targetimgpos=9;
+
+void runner()
 {
    TCHAR buffer[MAX_PATH] = {0};
    GetModuleFileName(NULL, buffer, MAX_PATH);
@@ -104,13 +85,59 @@ int main()
       unsigned int n = pwd.find("\\");
       if(n==string::npos) break;
       pwd.replace(n,1,"/");
+
    }
 
    seekdir(pwd);
+   cout << endl;
 
-   for(int i=0;i<(int)dirlist.size();i++)
-      cout << i << ". " << dirlist.at(i) << endl;
+   if(dirlist.size() == 0)
+   {
+      cout << "no poster found\n";
+      return;
+   }
 
+   currentimgpos = 0;
+   targetimgpos = 9;
+
+   while(window.isOpen())
+   {
+      mutex.lock();
+
+      cout << "\n";
+
+      for(int i=0;i<IMGQUEUE;i++)
+      {
+         if(!loaded[i])
+         {
+            imgpath[i] = dirlist.at(currentimgpos);
+            texture[i] = Texture();
+            texture[i].loadFromFile(dirlist.at(currentimgpos)); // names[i]
+            sprite[i] = Sprite();
+            sprite[i].setTexture(texture[i]);
+            loaded[i] = true;
+
+//            cout << "loaded : " << dirlist.at(currentimgpos) << endl;
+
+            if(currentimgpos!=targetimgpos)
+            {
+               currentimgpos++;
+               if(currentimgpos>=(int)dirlist.size())
+                  currentimgpos=0;
+            }
+         }
+
+         cout << i << ", " << imgpath[i] << endl;
+         if(!window.isOpen()) break;
+      }
+
+      mutex.unlock();
+      sleep(milliseconds(100));
+   }
+}
+
+int main()
+{
    window.setFramerateLimit(30);
 
    Thread imgdynamicloadrunner(runner);
@@ -127,6 +154,11 @@ int main()
             window.close();
             break;
 
+         case Event::MouseButtonPressed:
+            if(e.mouseButton.button == Mouse::Middle)
+               window.close();
+            break;
+
          case Event::KeyPressed:
             {
                if(e.key.code == Keyboard::Q)
@@ -135,6 +167,8 @@ int main()
             break;
 
          case Event::MouseWheelMoved:
+
+            mutex.lock();
 
             if(e.mouseWheel.delta>0)
             {
@@ -146,8 +180,10 @@ int main()
                for(int i=0;i<9;i++)
                {
                   if(!loaded[displayindexfield[i]])
+                  {
                      scrollup = false;
-                  if(!scrollup) break;
+                     break;
+                  }
                }
 
                if(scrollup)
@@ -163,17 +199,14 @@ int main()
                      loaded[tmp[i]] = false;
                   }
 
-
                   if(currentscrolldirection!=currentscrolldirectionpast && currentscrolldirectionpast!=-1)
                   {
                      currentimgpos-=12;
-                     if(currentimgpos<0)
+                     while(currentimgpos<0)
                         currentimgpos+=dirlist.size();
-
                      targetimgpos=currentimgpos+3;
                      if(targetimgpos>=(int)dirlist.size())
                         targetimgpos%=dirlist.size();
-
                   }
                   else if(currentscrolldirection==currentscrolldirectionpast || currentscrolldirectionpast==-1)
                   {
@@ -181,13 +214,15 @@ int main()
                         currentimgpos=3;
 
                      currentimgpos-=6;
-                     if(currentimgpos<0)
+                     while(currentimgpos<0)
                         currentimgpos+=dirlist.size();
-
                      targetimgpos=currentimgpos-3;
+                     while(targetimgpos<0)
+                        targetimgpos+=dirlist.size();
                      if(targetimgpos>=(int)dirlist.size())
                         targetimgpos%=dirlist.size();
                   }
+
 //                  cout << "from " << currentimgpos << " to " << targetimgpos << endl;
                }
                currentscrolldirectionpast = currentscrolldirection;
@@ -201,8 +236,10 @@ int main()
                for(int i=0;i<9;i++)
                {
                   if(!loaded[displayindexfield[i]])
+                  {
                      scrolldn = false;
-                  if(!scrolldn) break;
+                     break;
+                  }
                }
 
                if(scrolldn)
@@ -238,15 +275,14 @@ int main()
 //                  cout << "from " << currentimgpos << " to " << targetimgpos << endl;
 
                }
-
                currentscrolldirectionpast = currentscrolldirection;
-
-
             }
+
+            cout << "targetimgpos : " << targetimgpos << endl;
+            mutex.unlock();
             break;
          }
       }
-
 
 
       window.clear();
