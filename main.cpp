@@ -26,13 +26,10 @@ vector<string> dirlist;
 int currentimgpos=0;
 int targetimgpos=9;
 
-Mutex mutex;
-
 void runner()
 {
    while(window.isOpen())
    {
-      mutex.lock();
       for(int i=0;i<IMGQUEUE;i++)
       {
          if(!loaded[i])
@@ -55,7 +52,6 @@ void runner()
          }
          if(!window.isOpen()) break;
       }
-      mutex.unlock();
       sleep(milliseconds(100));
    }
 }
@@ -139,7 +135,6 @@ int main()
             break;
 
          case Event::MouseWheelMoved:
-            mutex.lock();
 
             if(e.mouseWheel.delta>0)
             {
@@ -248,8 +243,6 @@ int main()
 
 
             }
-
-            mutex.unlock();
             break;
          }
       }
