@@ -1,7 +1,7 @@
 
-#include <dirent.h>
 #include <string>
 #include <windows.h>
+#include <dirent.h>
 #include <iostream>
 #include <SFML/Graphics.hpp>
 using namespace std;
@@ -18,43 +18,48 @@ int displayindexfield[IMGQUEUE] = {0,1,2,3,4,5,6,7,8};
 
 RenderWindow window(VideoMode(WIDTH,HEIGHT),"imglister", Style::Default);
 
-bool scrolldn = false;
-bool scrollup = false;
+int currentscrolldirection = 0;
+int currentscrolldirectionpast = -1;
 
-string names[IMGQUEUE] =
-{
-   "1.png",
-   "2.png",
-   "3.png",
-   "4.png",
-   "5.png",
-   "6.png",
-   "7.png",
-   "8.png",
-   "9.png"
-};
+vector<string> dirlist;
+
+int currentimgpos=0;
+int targetimgpos=9;
+
+Mutex mutex;
 
 void runner()
 {
    while(window.isOpen())
    {
+      mutex.lock();
       for(int i=0;i<IMGQUEUE;i++)
       {
          if(!loaded[i])
          {
             texture[i] = Texture();
-            texture[i].loadFromFile(names[i]);
+            texture[i].loadFromFile(dirlist.at(currentimgpos)); // names[i]
             sprite[i] = Sprite();
             sprite[i].setTexture(texture[i]);
             loaded[i] = true;
-            cout <<"loaded "<< i << endl;
-         }
 
+            cout << "loaded : " << dirlist.at(currentimgpos) << endl;
+
+            if(currentimgpos!=targetimgpos)
+            {
+               currentimgpos++;
+               if(currentimgpos>=(int)dirlist.size())
+                  currentimgpos=0;
+            }
+
+         }
          if(!window.isOpen()) break;
       }
+      mutex.unlock();
       sleep(milliseconds(100));
    }
 }
+
 
 int seekdir(string path)
 {
@@ -68,16 +73,27 @@ int seekdir(string path)
          string item = string(dirread->d_name);
          if(item == "." || item == "..") continue;
 
-         string name = path + item;
-         cout << name << endl;
-      }
+         string name = path + "/" + item;
 
+         if(opendir(name.c_str())!=nullptr)
+         {
+            seekdir(name);
+         }
+         else
+         {
+            string ext = name.substr(name.find_last_of(".")+1);
+
+            if(ext=="jpg"||ext=="jpeg"||ext=="png")
+            {
+               dirlist.push_back(name);
+            }
+         }
+      }
       closedir(dir);
    }
    else
-   {
       return 1;
-   }
+   return 0;
 }
 
 int main()
@@ -89,14 +105,15 @@ int main()
 
    while(true)
    {
-      int n = pwd.find("\\");
+      unsigned int n = pwd.find("\\");
       if(n==string::npos) break;
       pwd.replace(n,1,"/");
    }
 
-//   seekdir(pwd);
-//
-//   return 0;
+   seekdir(pwd);
+
+   for(int i=0;i<(int)dirlist.size();i++)
+      cout << i << ". " << dirlist.at(i) << endl;
 
    window.setFramerateLimit(30);
 
@@ -122,11 +139,16 @@ int main()
             break;
 
          case Event::MouseWheelMoved:
+            mutex.lock();
+
             if(e.mouseWheel.delta>0)
             {
-               scrollup = true;
+               currentscrolldirection = 1;
 
-               for(int i=3;i<9;i++)
+
+               bool scrollup = true;
+
+               for(int i=0;i<9;i++)
                {
                   if(!loaded[displayindexfield[i]])
                      scrollup = false;
@@ -136,7 +158,6 @@ int main()
                if(scrollup)
                {
                   int tmp[3]={0,0,0};
-
                   for(int i=0;i<3;i++)
                      tmp[i] = displayindexfield[i+6];
                   for(int i=8;i>=3;i--)
@@ -147,17 +168,42 @@ int main()
                      loaded[tmp[i]] = false;
                   }
 
+
+                  if(currentscrolldirection!=currentscrolldirectionpast && currentscrolldirectionpast!=-1)
+                  {
+                     currentimgpos-=12;
+                     if(currentimgpos<0)
+                        currentimgpos+=dirlist.size();
+
+                     targetimgpos=currentimgpos+3;
+                     if(targetimgpos>=(int)dirlist.size())
+                        targetimgpos%=dirlist.size();
+
+                  }
+                  else if(currentscrolldirection==currentscrolldirectionpast || currentscrolldirectionpast==-1)
+                  {
+                     if(currentscrolldirectionpast==-1)
+                        currentimgpos=3;
+
+                     currentimgpos-=6;
+                     if(currentimgpos<0)
+                        currentimgpos+=dirlist.size();
+
+                     targetimgpos=currentimgpos-3;
+                     if(targetimgpos>=(int)dirlist.size())
+                        targetimgpos%=dirlist.size();
+                  }
+//                  cout << "from " << currentimgpos << " to " << targetimgpos << endl;
                }
-               else
-               {
-                  cout << "wait for loading...\n";
-               }
+               currentscrolldirectionpast = currentscrolldirection;
             }
             else
             {
-               scrolldn = true;
+               currentscrolldirection = 2;
 
-               for(int i=0;i<9-3;i++)
+               bool scrolldn = true;
+
+               for(int i=0;i<9;i++)
                {
                   if(!loaded[displayindexfield[i]])
                      scrolldn = false;
@@ -167,7 +213,6 @@ int main()
                if(scrolldn)
                {
                   int tmp[3]={0,0,0};
-
                   for(int i=0;i<3;i++)
                      tmp[i] = displayindexfield[i];
                   for(int i=0;i<6;i++)
@@ -177,17 +222,38 @@ int main()
                      displayindexfield[6+i] = tmp[i];
                      loaded[tmp[i]] = false;
                   }
+
+                  if(currentscrolldirection!=currentscrolldirectionpast && currentscrolldirectionpast!=-1)
+                  {
+                     currentimgpos+=6;
+                     if(currentimgpos>=(int)dirlist.size())
+                        currentimgpos%=dirlist.size();
+
+                     targetimgpos=currentimgpos+3;
+                     if(targetimgpos>=(int)dirlist.size())
+                        targetimgpos%=dirlist.size();
+                  }
+                  else if(currentscrolldirection==currentscrolldirectionpast || currentscrolldirectionpast==-1)
+                  {
+                     targetimgpos+=3;
+                     if(targetimgpos>=(int)dirlist.size())
+                        targetimgpos%=dirlist.size();
+                  }
+
+//                  cout << "from " << currentimgpos << " to " << targetimgpos << endl;
+
                }
-               else
-               {
-                  cout << "wait for loading...\n";
-               }
+
+               currentscrolldirectionpast = currentscrolldirection;
 
 
             }
+
+            mutex.unlock();
             break;
          }
       }
+
 
 
       window.clear();
@@ -201,7 +267,7 @@ int main()
             int imgwid = WIDTH/3;
             int imghei = HEIGHT/3;
 
-            float scaletofit=0;
+            float scaletofit;
 
             if(texture[currindex].getSize().x > texture[currindex].getSize().y)
                scaletofit = (float)imgwid / (float)texture[currindex].getSize().x;
@@ -211,10 +277,11 @@ int main()
             int px = i%3;
             int py = i<3 ? 0 : i/3;
 
-            sprite[currindex].setScale(scaletofit,scaletofit);
-            sprite[currindex].setPosition(px*imgwid, py*imghei);
+            int xpush = imgwid/2 - ((float)texture[currindex].getSize().x * scaletofit)/2;
+            int ypush = imghei/2 - ((float)texture[currindex].getSize().y * scaletofit)/2;
 
-//            cout << px <<", "<< py << endl;
+            sprite[currindex].setScale(scaletofit,scaletofit);
+            sprite[currindex].setPosition(px*imgwid+xpush, py*imghei+ypush);
 
             window.draw(sprite[currindex]);
          }
